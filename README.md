@@ -1,86 +1,132 @@
-# OPENTRINITY / NENIFIX — local AI gateway (MVP)
+# OpenTrinity
 
-A Windows-first, local-only OpenAI-compatible gateway for integrating AI features into company products. Go handles authentication, limits, process lifecycle, configuration and the CLI. **LiteLLM is the only inference router** — it alone maps the public alias `nenifix-coder` to up to three provider slots and performs ordered A→B→C fallback.
+OpenTrinity is a local, Windows-first AI gateway that gives your tools one stable OpenAI-compatible endpoint while routing inference through **LiteLLM** behind the scenes.
 
-This is the narrowed MVP defined in `docs/MVP_BUILD_PROMPT.md`, not the complete v1.6.6 release.
+It exposes a single local model alias, `nenifix-coder`, and lets you map that alias to up to three provider deployments (A/B/C) with ordered fallback. Go owns the local control plane — configuration, secrets, process lifecycle, validation, and the CLI/TUI. LiteLLM owns inference routing. That boundary is deliberate: one stable client contract, one routing engine.
 
-## Product promise
+> **Status:** MVP. This repository reflects the narrowed MVP build, not the complete v1.6.6 release vision.
+
+## Why it exists
+
+Product teams often want to integrate AI features without hard-coding a vendor SDK, spreading API keys across apps, or rewriting clients every time a model/provider changes. OpenTrinity gives you a local gateway contract:
 
 ```text
 Base URL: http://127.0.0.1:3888/v1
-API key:  local OPENTRINITY gateway key
+API key:  <local OpenTrinity gateway key>
 Model:    nenifix-coder
 ```
 
-Supported ingress (exact allowlist):
+Your app talks to localhost. OpenTrinity handles the local gateway key, provider credentials, deployment slots, and safe apply/rollback of routing config.
 
-- `GET /health`
-- `GET /ready`
-- `GET /v1/models`
-- `POST /v1/chat/completions`
-- `POST /v1/messages` (Anthropic-compatible endpoint for Claude Code; forwarded to LiteLLM's beta `/v1/messages` router)
+## What it does
 
-Everything else is rejected before reaching LiteLLM. All listeners bind only to `127.0.0.1`: gateway 3888, LiteLLM 3889, control 8369.
+- **OpenAI-compatible local ingress** — A small, explicit allowlist of endpoints on `127.0.0.1:3888`.
+- **Stable model alias** — Clients use `nenifix-coder`; you decide which provider/model sits behind slots A, B, and C.
+- **Ordered fallback** — LiteLLM performs A→B→C fallback when configured and eligible.
+- **Local secret handling** — Provider keys and the local gateway key are stored in Windows Credential Manager, not in SQLite, YAML, logs, or argv.
+- **Atomic config apply** — Candidate config is validated, activated, and rolled back to last-known-good on failure.
+- **Supervisor-managed processes** — Gateway, control plane, and LiteLLM run as local loopback services with lifecycle supervision.
+- **CLI + TUI** — Manage providers, credentials, models, deployments, apply history, and diagnostics from the terminal.
 
-## Compatibility — carefully bounded
+## Supported API surface
 
-This is an OpenAI-compatible **subset**, tested for non-streaming chat completions, SSE streaming, basic tool-call pass-through and the `/v1/models` listing. It also exposes a small Anthropic-compatible `/v1/messages` route for Claude Code. Universal OpenAI or Anthropic API compatibility is **not** claimed. Fallback means a request may be sent to a second or third provider if the first fails; disclose this to users when configuring real providers.
+OpenTrinity intentionally exposes a narrow allowlist:
 
-No free-tier provider, model, price, quota or uptime is guaranteed or claimed. Live provider availability was not tested because no owner credential was supplied.
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | Gateway process liveness |
+| `GET` | `/ready` | Gateway-to-LiteLLM readiness |
+| `GET` | `/v1/models` | OpenAI-compatible model listing |
+| `POST` | `/v1/chat/completions` | Chat completions, streaming and non-streaming |
+| `POST` | `/v1/messages` | Anthropic-compatible route for Claude Code, forwarded through LiteLLM |
+
+Everything else is rejected before reaching LiteLLM.
+
+**Compatibility note:** This is a carefully bounded OpenAI-compatible subset, tested for non-streaming chat completions, SSE streaming, basic tool-call pass-through, and `/v1/models`. It also exposes a small Anthropic-compatible `/v1/messages` route for Claude Code. It does **not** claim universal OpenAI or Anthropic API compatibility.
+
+## Architecture
+
+```text
+Client (Codex / Claude Code / your app)
+            │
+            ▼
+OpenTrinity Gateway        127.0.0.1:3888
+  - local bearer auth
+  - exact route allowlist
+  - request limits / cancellation
+  - sanitized operational events
+            │
+            ▼
+LiteLLM Proxy              127.0.0.1:3889  (private)
+  - alias -> deployment routing
+  - A / B / C fallback
+            │
+            ├── Provider slot A
+            ├── Provider slot B
+            └── Provider slot C
+
+OpenTrinity Control        127.0.0.1:8369  (local control plane)
+OpenTrinity Supervisor     owns lifecycle, apply, readiness, restart policy
+SQLite (WAL)               config/state metadata only, no secret values
+Windows Credential Manager provider keys + local gateway key
+```
 
 ## Requirements
 
-- Windows 11 (tested on build 26100), no administrator rights required.
-- Go 1.26.3 was used to build the binary; the shipped `dist/opentrinity.exe` needs no Go toolchain at runtime.
-- LiteLLM 1.74.15 in a CPython 3.11 virtual environment. The acceptance environment used `.phase0/venv2/Scripts/litellm.exe`.
-- Windows Credential Manager for all secret values.
+- **Windows 11** (tested on build 26100). No administrator rights required for normal operation.
+- **Go 1.26+** to build from source. The shipped binary can run without a Go toolchain.
+- **LiteLLM 1.74.15** in a CPython 3.11 virtual environment.
+- **Windows Credential Manager** for secret storage.
 
-## Build
+## Build from source
 
-```bash
-cd C:/Users/ai9/Documents/opentrinity
-CGO_ENABLED=0 go build -o dist/opentrinity.exe ./cmd/opentrinity
+```powershell
+cd D:\opentrinity
+$env:CGO_ENABLED = "0"
+go build -o dist/opentrinity.exe ./cmd/opentrinity
 ```
 
-Pinned dependencies are in `go.mod`/`go.sum`:
+## Quick start
 
-| Dependency | Version | Purpose |
-|---|---:|---|
-| `modernc.org/sqlite` | 1.62.0 | CGO-free configuration database |
-| `github.com/charmbracelet/bubbletea` | 1.3.10 | small terminal UI |
-| `github.com/danieljoos/wincred` | 1.2.3 | Windows Credential Manager |
-| `golang.org/x/term` | 0.48.0 | masked terminal input |
-| `golang.org/x/sys` | 0.50.0 | Windows Job Object containment |
+All commands use the CLI. Secrets are never passed as command-line arguments.
 
-## First-time setup with a real provider
+```powershell
+# Point OpenTrinity at your LiteLLM executable
+$env:OT_LITELLM_EXE = "C:\path\to\litellm.exe"
 
-All commands use the CLI executable. Secrets are never accepted as arguments.
+# Initialize local state and keys
+.\dist\opentrinity.exe init
 
-```bash
-set OT_LITELLM_EXE=C:\Users\ai9\Documents\opentrinity\.phase0\venv2\Scripts\litellm.exe
+# Add a provider, credential, and model
+.\dist\opentrinity.exe providers add openai https://api.openai.com/v1
+.\dist\opentrinity.exe credentials add 1
+.\dist\opentrinity.exe models add 1 gpt-4o-mini
 
-dist\opentrinity.exe init
-dist\opentrinity.exe providers add openai https://api.openai.com/v1
-dist\opentrinity.exe credentials add 1            # prompts with masked input
-dist\opentrinity.exe models add 1 gpt-4o-mini
-dist\opentrinity.exe deployments set A 1
-dist\opentrinity.exe apply run
-dist\opentrinity.exe start
-dist\opentrinity.exe status
-dist\opentrinity.exe gateway key show             # requires typing SHOW
+# Assign slot A and apply
+.\dist\opentrinity.exe deployments set A 1
+.\dist\opentrinity.exe apply run
+
+# Start the local stack
+.\dist\opentrinity.exe start
+.\dist\opentrinity.exe status
+
+# Reveal the local gateway key when you need it (requires typing SHOW)
+.\dist\opentrinity.exe gateway key show
 ```
 
-To configure fallback slots B and C, add more providers/credentials/models and assign them:
+### Configure fallback
 
-```bash
-dist\opentrinity.exe deployments set B 2
-dist\opentrinity.exe deployments set C 3
-dist\opentrinity.exe apply run
+```powershell
+.\dist\opentrinity.exe deployments set B 2
+.\dist\opentrinity.exe deployments set C 3
+.\dist\opentrinity.exe apply run
 ```
 
-Slots must be contiguous starting at A. The generated LiteLLM config uses `os.environ/<reference>` placeholders; the supervisor reads actual values from Windows Credential Manager and supplies them only in the child process environment.
+Slots must be contiguous starting at A. The generated LiteLLM config uses `os.environ/<reference>` placeholders; the supervisor resolves actual secret values from Windows Credential Manager and supplies them only to the child process environment.
 
-## Client example
+## Use it from a client
+
+### cURL
 
 ```bash
 curl http://127.0.0.1:3888/v1/chat/completions \
@@ -89,11 +135,7 @@ curl http://127.0.0.1:3888/v1/chat/completions \
   -d "{\"model\":\"nenifix-coder\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"
 ```
 
-Streaming: add `"stream": true`. Tool calls: pass standard `tools` and `tool_choice` fields; arguments are passed through without inspection or logging.
-
-## Coding agent CLI setup
-
-Both CLIs use the same local gateway key and the `nenifix-coder` alias. The gateway key is read from Windows Credential Manager by a helper, so it is not written into either CLI config as plain text.
+Add `"stream": true` for SSE streaming. Standard `tools` and `tool_choice` fields are passed through.
 
 ### Codex CLI
 
@@ -104,87 +146,84 @@ model = "nenifix-coder"
 model_provider = "opentrinity"
 
 [model_providers.opentrinity]
-name = "OPENTRINITY local gateway"
+name = "OpenTrinity local gateway"
 base_url = "http://127.0.0.1:3888/v1"
 env_key = "OPENTRINITY_API_KEY"
 wire_api = "responses"
 ```
 
-Run with:
+### Claude Code
 
-```bash
-OPENTRINITY_API_KEY=$(printf 'SHOW\n' | dist/opentrinity.exe gateway key show | tail -1) codex exec "hello"
+Configure `~/.claude/settings.json` to use `ANTHROPIC_BASE_URL=http://127.0.0.1:3888`, `ANTHROPIC_MODEL=nenifix-coder`, and an `apiKeyHelper` that reads the gateway key from Credential Manager at runtime (see `scripts/claude_gateway_key.py`). Claude Code `/v1/messages` calls are forwarded through LiteLLM's Anthropic-format router.
+
+## CLI commands
+
+```text
+opentrinity init
+opentrinity start | stop | restart | status | doctor
+opentrinity providers list | add <name> <api-base> [kind]
+opentrinity models list | add <provider-id> <model-id> [label]
+opentrinity credentials list | add <provider-id> [label] | stdin <provider-id> [label] | rotate <id> | disable <id>
+opentrinity deployments list | set <slot> <model-id> | enable <slot> | disable <slot>
+opentrinity apply validate | run [generation-id] | history | rollback
+opentrinity gateway key rotate | show
+opentrinity tui
 ```
 
-Current Codex releases require `wire_api = "responses"`; the gateway forwards `/v1/responses` to LiteLLM.
+The TUI provides an interactive flow for status, provider/credential setup, deployment assignment, apply/rollback, and help. In non-interactive terminals it exits with a helpful message instead of hanging.
 
-### Claude Code CLI
+## Security and privacy
 
-`~/.claude/settings.json` uses `apiKeyHelper` with `scripts/claude_gateway_key.py`, `ANTHROPIC_BASE_URL=http://127.0.0.1:3888` and `ANTHROPIC_MODEL=nenifix-coder`. The helper reads the gateway key from Credential Manager at run time. Claude Code's `/v1/messages` calls are forwarded to LiteLLM's beta Anthropic-format router, not to the raw Anthropic pass-through endpoint.
+- **Secrets stay in Windows Credential Manager.** SQLite stores secret references, never secret values.
+- **No secrets in generated config values.** LiteLLM YAML uses environment-reference placeholders.
+- **No prompt/completion logging by default.** The MVP does not log or persist prompts, completions, or tool arguments.
+- **Loopback only.** Gateway, LiteLLM, and control plane bind to `127.0.0.1`. No LAN binding, tunnel, or remote admin surface.
+- **Process containment.** The supervisor uses a Windows Job Object so child processes do not outlive it.
+- **Safe apply.** `apply run` validates a candidate, activates it, and rolls back to last-known-good if health checks fail.
 
-Run with:
-
-```bash
-claude -p "hello"
-```
-
-## Interactive TUI
-
-```bash
-dist\opentrinity.exe tui
-```
-
-The TUI offers status, provider/credential setup with masked secret entry, A/B/C deployment assignment, apply/rollback confirmation, help and quit. It calls the same services as the CLI. Non-interactive terminals fail with a helpful message instead of hanging.
-
-## Other commands
+## Local demo and tests
 
 ```bash
-dist\opentrinity.exe providers list
-dist\opentrinity.exe models list
-dist\opentrinity.exe credentials list
-dist\opentrinity.exe credentials rotate <id>
-dist\opentrinity.exe deployments list
-dist\opentrinity.exe apply validate
-dist\opentrinity.exe apply history
-dist\opentrinity.exe apply rollback
-dist\opentrinity.exe doctor
-dist\opentrinity.exe restart
-dist\opentrinity.exe stop
-```
+# Deterministic local routing demo (fake upstreams, not real AI models)
+bash scripts/launch-demo.sh
 
-For automation only, `credentials stdin <provider-id> [label]` reads one secret line from stdin. It never accepts a secret as a command-line argument and must not be used with untrusted input.
-
-## Local deterministic demo
-
-`bash scripts/launch-demo.sh` starts the bundled fake upstream on loopback ports 11001–11003, configures three fake providers on first run, applies a generated config and starts OPENTRINITY. Demo state lives in `.demo-userdata` inside the project. The fake upstream returns fixed text — **it is a routing test fixture, not a real AI model**. Use real provider credentials for actual AI features.
-
-## Testing
-
-```bash
+# Unit tests
 go test -vet=off ./...
+
+# Acceptance suite
 bash scripts/acceptance/run.sh
 ```
 
-The acceptance script proves A→B→C fallback with real per-slot counters, streaming commit behaviour, cancellation, tool pass-through, sanitized errors, loopback-only binding, singleton/child restart behaviour and a secret-canary scan. Results are in `docs/PHASE_REPORTS/evidence/acceptance-summary.txt`. Gate reports are in `docs/PHASE_REPORTS/`.
-
-## Privacy and security notes
-
-- Provider keys and the local gateway key are stored only in Windows Credential Manager. SQLite stores references, never values.
-- Secrets never appear in YAML, argv, logs, events, diagnostics, URLs, source control or generated reports.
-- Prompts, completions and tool arguments are not logged or persisted by this MVP.
-- All settings are local-first. There is no remote administration, tunnel, LAN binding or UPnP.
-- The supervisor uses a Windows Job Object so child processes cannot outlive it.
-- `apply run` validates a candidate, activates it and rolls back to last-known-good if health checks fail.
+The demo uses fake upstreams on loopback ports and fixed responses. It is a routing/behavior fixture, not a real AI model. Use real provider credentials for actual AI features.
 
 ## Known limitations
 
-- Windows only; Linux support is deferred.
-- No web dashboard, browser sessions, CSRF flow, event spool, analytics, backup UX, installer, updater or uninstaller.
-- No live provider test was performed; no free-tier availability, price or quota claim is made.
-- Cooldown, same-slot retries and provider classification by Go are disabled/absent by design.
-- Role-only SSE commit point remains unobservable with the pinned LiteLLM/harness combination and is explicitly reported as skipped. Streamed tool-call deltas were verified with an extended fake upstream.
-- LiteLLM crash recovery and port-conflict reporting were verified in the final hardening run.
+- **Windows-first MVP.** Linux support is planned/design intent, not shipped in this MVP.
+- **Narrow compatibility.** Not a universal OpenAI/Anthropic proxy.
+- **No web dashboard.** Control plane and TUI/CLI exist; a full browser dashboard is not part of this MVP.
+- **No live provider proof in this repo.** No free-tier availability, price, quota, or uptime is claimed.
+- **LiteLLM is the router.** Go does not implement provider selection, retries, cooldown, or fallback policy.
+- **Some streaming edge cases are documented.** See `docs/PHASE_REPORTS/` for gate evidence and known skips.
+
+## Repository layout
+
+```text
+cmd/opentrinity/     CLI entrypoint and process modes
+internal/apply/      config validation, apply, rollback
+internal/config/     paths and runtime config
+internal/control/    local control plane
+internal/database/   SQLite state
+internal/gateway/    OpenAI-compatible ingress
+internal/platform/   OS-specific process containment
+internal/routingconfig/  LiteLLM config generation
+internal/secrets/    Windows Credential Manager integration
+internal/supervisor/ child process lifecycle
+internal/tui/        terminal UI
+docs/                specs, phase reports, evidence
+scripts/             demo, acceptance, helpers
+tests/fakeupstream/  deterministic upstream fixture
+```
 
 ## Release status
 
-No publish, push, deployment or public exposure was performed. External release requires explicit owner approval and a target environment.
+This repository is an MVP build with local acceptance evidence under `docs/PHASE_REPORTS/`. It has not been positioned here as a public, production-hardened release. Review provider terms, data handling, and fallback behavior before routing real user data through third-party providers.
