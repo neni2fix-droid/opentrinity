@@ -1,0 +1,46 @@
+OPENTRINITY MVP acceptance 2026-11-24T21:14:14Z
+root=/c/Users/ai9/Documents/opentrinity
+PASS gateway-ready (got=1)
+PASS ROUTE-001-status (got=200)
+PASS ROUTE-001-counters (got=1/0/0)
+FAIL ROUTE-002-status (got=502 want=200)
+FAIL ROUTE-002-counters (got=0/0/0 want=1/1/0)
+PASS ROUTE-003-status (got=200)
+PASS ROUTE-003-counters (got=1/1/1)
+PASS ROUTE-004-status-sanitized-502 (got=502)
+PASS ROUTE-004-counters (got=1/1/1)
+PASS ROUTE-005-invalid-alias-status (got=400)
+PASS ROUTE-005-invalid-alias-counters (got=0/0/0)
+PASS ROUTE-006-unsupported-path-status (got=404)
+PASS ROUTE-006-unsupported-path-counters (got=0/0/0)
+PASS ROUTE-007-client-error-status (got=400)
+PASS ROUTE-007-client-error-counters (got=0/0/0)
+PASS SEC-001-missing-key-status (got=401)
+PASS SEC-001-missing-key-counters (got=0/0/0)
+PASS SEC-002-invalid-key-status (got=401)
+PASS SEC-002-invalid-key-counters (got=0/0/0)
+FAIL SEC-009-oversized-status (got=502 want=413)
+PASS SEC-009-oversized-counters (got=0/0/0)
+PASS SEC-host-validation-status (got=421)
+PASS SEC-host-validation-counters (got=0/0/0)
+PASS STREAM-001-precommit-status (got=200)
+PASS STREAM-001-precommit-counters (got=1/1/0)
+PASS STREAM-006-done-marker
+PASS STREAM-003-postcommit-counters (got=1/0/0)
+PASS ROUTE-008-deadline-counters (got=1/0/0)
+PASS TOOL-001-nonstream-pass-through
+PASS TOOL-001-counters (got=1/0/0)
+PASS TOOL-002-streamed-counters (got=1/0/0)
+PASS TOOL-002-streamed-tool-deltas
+PASS PROC-loopback-listeners (got=3)
+PASS SEC-loopback-only (got=0)
+PASS PROC-001-singleton
+PASS PROC-004-gateway-independent-restart (28228 -> 12872)
+PASS PROC-litellm-survives-gateway-restart
+PASS PROC-control-restart (17508 -> 27192)
+PASS PROC-003-control-crash-does-not-stop-gateway
+PASS PROC-005-litellm-crash-recovery (1616 -> 24652)
+PASS SEC-canary-no-secret-on-disk (got=0)
+PASS SEC-no-raw-upstream-error-in-evidence
+PASS PROC-007-port-conflict-report
+GATE RESULT: FAIL

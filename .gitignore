@@ -1,0 +1,41 @@
+# Python phase-0 research venv (never shipped)
+.phase0/
+
+# Go build output
+/bin/
+*.exe
+*.test
+*.out
+dist/
+
+# Runtime data and generated state (never committed)
+/runtime/
+*.db
+*.db-wal
+*.db-shm
+
+# Logs and spool segments
+*.log
+/spool/
+logs/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Unrelated third-party DeepSeek Harness bundle present in the working tree.
+# Not part of OPENTRINITY; preserved untouched per SPEC.md §21 / rule 9.
+cli-anything-dsh-bundle/
+
+# Local dev/runtime artifacts
+.codex-home/
+.demo-userdata/
+.acceptance-userdata/
+.test-userdata/
+pip-build-tracker-*/
+pip-ephem-wheel-cache-*/
+pip-install-*/
+logs-demo-*
+

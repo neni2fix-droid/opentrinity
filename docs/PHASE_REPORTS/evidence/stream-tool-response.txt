@@ -1,0 +1,10 @@
+data: {"id":"chatcmpl-fake-tool-stream","created":1795555026,"model":"fake-model","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"id":"call_fake_stream_1","function":{"arguments":"","name":"get_weather"},"type":"function","index":0}]}}]}
+
+data: {"id":"chatcmpl-fake-tool-stream","created":1795555026,"model":"fake-model","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"function":{"arguments":"{\"city\":\""},"type":"function","index":0}]}}]}
+
+data: {"id":"chatcmpl-fake-tool-stream","created":1795555026,"model":"fake-model","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"function":{"arguments":"Accra\"}"},"type":"function","index":0}]}}]}
+
+data: {"id":"chatcmpl-fake-tool-stream","created":1795555026,"model":"fake-model","object":"chat.completion.chunk","choices":[{"finish_reason":"tool_calls","index":0,"delta":{}}]}
+
+data: [DONE]
+

@@ -1,0 +1,6 @@
+data: {"id":"chatcmpl-fake","created":1795555016,"model":"fake-model","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"fake streaming content","role":"assistant"}}]}
+
+data: {"id":"chatcmpl-fake","created":1795555016,"model":"fake-model","object":"chat.completion.chunk","choices":[{"finish_reason":"stop","index":0,"delta":{}}]}
+
+data: [DONE]
+
